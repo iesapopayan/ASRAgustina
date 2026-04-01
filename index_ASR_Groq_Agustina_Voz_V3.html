@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Agustina (Groq)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+        }
+        #chat-container {
+            text-align: center;
+            max-width: 600px;
+            padding: 30px;
+            background-color: #1e1e1e;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #f55036; 
+            margin-bottom: 5px;
+        }
+        #statusText {
+            margin: 20px 0;
+            font-size: 1.1rem;
+            color: #aaaaaa;
+            min-height: 60px;
+            line-height: 1.4;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background-color: #f55036;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(245, 80, 54, 0.4);
+            margin-bottom: 20px;
+        }
+        button.listening {
+            background-color: #28a745; /* Verde para indicar que está activa */
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+            animation: pulse 2s infinite;
+        }
+        select {
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #2d2d2d;
+            color: white;
+            border: 1px solid #444;
+            font-size: 1rem;
+            width: 100%;
+            max-width: 300px;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <h1>Asistente Agustina</h1>
+        <p>Di <b>"Hola Agustina"</b> seguido de tu pregunta.</p>
+        
+        <button id="btnListen">Iniciar Sistema</button>
+        <p id="statusText">Presiona "Iniciar Sistema" una vez para dar permisos de micrófono.</p>
+        
+        <label for="voiceSelect">Voz de Agustina:</label><br>
+        <select id="voiceSelect"></select>
+    </div>
+
+    <script>
+        // --- 1. CONFIGURACIÓN ---
+        const API_KEY = 'TU_CLAVE_DE_GROQ_AQUI'; // ¡Pégala aquí!
+
+        const btnListen = document.getElementById('btnListen');
+        const statusText = document.getElementById('statusText');
+        const voiceSelect = document.getElementById('voiceSelect');
+        
+        let vocesDisponibles = [];
+        let asistenteHablando = false;
+        let esperandoComando = false;
+
+        // --- 2. CARGAR VOCES DISPONIBLES ---
+        function cargarVoces() {
+            vocesDisponibles = window.speechSynthesis.getVoices();
+            voiceSelect.innerHTML = '';
+            
+            // Filtramos solo las voces en español para no llenar la lista
+            const vocesEspañol = vocesDisponibles.filter(voz => voz.lang.includes('es'));
+            
+            vocesEspañol.forEach((voz, indice) => {
+                const opcion = document.createElement('option');
+                opcion.textContent = `${voz.name} (${voz.lang})`;
+                opcion.value = vocesDisponibles.indexOf(voz); // Guardamos el índice real
+                voiceSelect.appendChild(opcion);
+            });
+        }
+        
+        window.speechSynthesis.onvoiceschanged = cargarVoces;
+
+        // --- 3. MOTOR DE ESCUCHA CONTINUA ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        recognition.lang = 'es-CO'; 
+        recognition.continuous = true; // Fundamental: Se queda escuchando
+        recognition.interimResults = false; 
+
+        recognition.onstart = () => {
+            btnListen.textContent = "Agustina Activa";
+            btnListen.classList.add("listening");
+            if (!asistenteHablando) statusText.textContent = "Esperando la palabra mágica...";
+        };
+
+        recognition.onresult = (event) => {
+            // Obtenemos la última frase que escuchó
+            const current = event.resultIndex;
+            const transcriptOriginal = event.results[current][0].transcript;
+            
+            // Limpiamos la frase para que sea más fácil buscar "hola agustina"
+            const transcriptLimpio = transcriptOriginal.toLowerCase().replace(/[.,!?¿¡]/g, '').trim();
+
+            if (transcriptLimpio.includes("hola agustina")) {
+                // Separamos lo que dijo después de "hola agustina"
+                const partes = transcriptLimpio.split("hola agustina");
+                const comando = partes[1].trim();
+
+                if (comando.length > 2) {
+                    // Dijeron: "Hola Agustina, ¿quién descubrió América?"
+                    procesarConElAgente(comando);
+                    esperandoComando = false;
+                } else {
+                    // Dijeron solo: "Hola Agustina"
+                    hablar("Hola, te escucho. ¿Qué necesitas?");
+                    esperandoComando = true; // Se queda atenta a la siguiente frase
+                }
+            } else if (esperandoComando) {
+                // Si ya había dicho "Hola Agustina" antes, procesamos esta frase
+                procesarConElAgente(transcriptOriginal);
+                esperandoComando = false;
+            } else {
+                // Escuchó algo en el ambiente, pero no era para ella
+                console.log("Ruido ignorado:", transcriptOriginal);
+            }
+        };
+
+        recognition.onend = () => {
+            // Si el micrófono se apaga solo (por silencio) y la IA no está hablando, lo volvemos a encender
+            if (!asistenteHablando) {
+                try { recognition.start(); } catch(e) {}
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.log("Error de audio:", event.error);
+            // Ignoramos el error "no-speech" porque es normal cuando hay silencio
+        };
+
+        // El botón ahora solo sirve para arrancar el sistema la primera vez
+        btnListen.addEventListener('click', () => {
+            cargarVoces();
+            try { recognition.start(); } catch(e) {}
+        });
+
+        // --- 4. CEREBRO DE AGUSTINA (Conocimiento General) ---
+        async function procesarConElAgente(textoEntrada) {
+            statusText.innerHTML = `Tú: "${textoEntrada}"<br><br><em>Agustina está pensando...</em>`;
+            
+            try {
+                const respuesta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile", 
+                        messages: [
+                            {
+                                // NUEVA PERSONALIDAD GLOBAL
+                                role: "system",
+                                content: "Eres Agustina, un asistente virtual inteligente y amable de la Institución Educativa San Agustín. Respondes de forma clara a cualquier consulta de conocimientos generales, ciencias, tecnología, historia o curiosidades. Tus respuestas deben ser precisas, conversacionales y directas, ideales para ser leídas en voz alta por un parlante. Evita listas largas o formatos complejos."
+                            },
+                            {
+                                role: "user",
+                                content: textoEntrada
+                            }
+                        ],
+                        max_tokens: 200,
+                        temperature: 0.7
+                    })
+                });
+
+                const datos = await respuesta.json();
+                const textoIA = datos.choices[0].message.content;
+                
+                statusText.innerHTML = `Tú: "${textoEntrada}"<br><br><span style="color: #f55036;">Agustina: "${textoIA}"</span>`;
+                hablar(textoIA);
+
+            } catch (error) {
+                statusText.textContent = "Error de conexión.";
+                hablar("Lo siento, perdí la conexión a internet.");
+            }
+        }
+
+        // --- 5. MOTOR DE VOZ ---
+        function hablar(texto) {
+            window.speechSynthesis.cancel();
+            
+            // Pausamos el micrófono para que Agustina no se escuche a sí misma
+            asistenteHablando = true;
+            recognition.stop();
+
+            const utterance = new SpeechSynthesisUtterance(texto);
+            
+            // Asignamos la voz que el usuario eligió en el menú desplegable
+            const indiceVozSeleccionada = voiceSelect.value;
+            if (vocesDisponibles[indiceVozSeleccionada]) {
+                utterance.voice = vocesDisponibles[indiceVozSeleccionada];
+            }
+
+            utterance.onend = () => {
+                // Cuando termina de hablar, reactivamos el micrófono
+                asistenteHablando = false;
+                try { recognition.start(); } catch(e) {}
+                statusText.textContent = "Esperando la palabra mágica...";
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+    </script>
+</body>
+</html>
