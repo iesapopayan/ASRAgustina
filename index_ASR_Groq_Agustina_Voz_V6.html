@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Agustina</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+        }
+        #chat-container {
+            text-align: center;
+            max-width: 600px;
+            padding: 30px;
+            background-color: #1e1e1e;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #f55036; 
+            margin-bottom: 5px;
+        }
+        #statusText {
+            margin: 20px 0;
+            font-size: 1.1rem;
+            color: #aaaaaa;
+            min-height: 60px;
+            line-height: 1.4;
+        }
+        .controles {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        #btnListen {
+            background-color: #f55036;
+            box-shadow: 0 4px 15px rgba(245, 80, 54, 0.4);
+        }
+        #btnListen:hover {
+            background-color: #d43f27;
+            transform: scale(1.05);
+        }
+        #btnListen.listening {
+            background-color: #28a745; 
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+            animation: pulse 2s infinite;
+        }
+        #btnStop {
+            background-color: #6c757d; /* Color gris para el botón de detener */
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.4);
+        }
+        #btnStop:hover {
+            background-color: #5a6268;
+            transform: scale(1.05);
+        }
+        select {
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #2d2d2d;
+            color: white;
+            border: 1px solid #444;
+            font-size: 1rem;
+            width: 100%;
+            max-width: 300px;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <h1>Asistente Agustina</h1>
+        <p>Di <b>"Hola Agustina"</b> seguido de tu pregunta.</p>
+        
+        <div class="controles">
+            <button id="btnListen">Iniciar Sistema</button>
+            <button id="btnStop">Detener 🛑</button>
+        </div>
+
+        <p id="statusText">Presiona "Iniciar Sistema" para comenzar.</p>
+        
+        <label for="voiceSelect">Voz de Agustina:</label><br>
+        <select id="voiceSelect"></select>
+    </div>
+
+    <script>
+        // --- 1. CONFIGURACIÓN SEGURA DE LA CLAVE ---
+        let API_KEY = localStorage.getItem('groqApiKey');
+
+        if (!API_KEY) {
+            API_KEY = prompt("Para conectar el cerebro de Agustina, pega tu clave de Groq aquí:");
+            if (API_KEY) {
+                localStorage.setItem('groqApiKey', API_KEY);
+            } else {
+                alert("Sin clave no hay conexión. Recarga la página para intentarlo de nuevo.");
+            }
+        }
+
+        const btnListen = document.getElementById('btnListen');
+        const btnStop = document.getElementById('btnStop');
+        const statusText = document.getElementById('statusText');
+        const voiceSelect = document.getElementById('voiceSelect');
+        
+        let vocesDisponibles = [];
+        let asistenteHablando = false;
+        let esperandoComando = false;
+        let sistemaActivo = false;
+
+        // --- 2. CARGAR VOCES DISPONIBLES ---
+
+// --- 2. CARGAR VOCES DISPONIBLES (Con auto-selección de Colombia) ---
+        function cargarVoces() {
+            vocesDisponibles = window.speechSynthesis.getVoices();
+            voiceSelect.innerHTML = '';
+            
+            // Filtramos solo español
+            const vocesEspañol = vocesDisponibles.filter(voz => voz.lang.includes('es'));
+            
+            let indiceSeleccionadoPorDefecto = 0;
+            let prioridadEncontrada = 0;
+
+            vocesEspañol.forEach((voz, indiceMenu) => {
+                const opcion = document.createElement('option');
+                opcion.textContent = `${voz.name} (${voz.lang})`;
+                opcion.value = vocesDisponibles.indexOf(voz); 
+                voiceSelect.appendChild(opcion);
+
+                // LÓGICA DE DETECCIÓN DE VOZ:
+                const nombreVoz = voz.name.toLowerCase();
+                const idiomaVoz = voz.lang.toLowerCase();
+
+                // Prioridad 1: Voz explícitamente de Colombia (es-CO)
+                if (idiomaVoz.includes('co') && prioridadEncontrada < 3) {
+                    indiceSeleccionadoPorDefecto = indiceMenu;
+                    prioridadEncontrada = 3; 
+                } 
+                // Prioridad 2: Voces femeninas latinas conocidas (Sabina, Helena, Paulina, etc.)
+                else if ((nombreVoz.includes('sabina') || nombreVoz.includes('helena') || nombreVoz.includes('paulina') || nombreVoz.includes('female') || nombreVoz.includes('mujer')) && prioridadEncontrada < 2) {
+                    indiceSeleccionadoPorDefecto = indiceMenu;
+                    prioridadEncontrada = 2;
+                }
+            });
+
+            // Aplicamos la selección automática en el menú desplegable
+            if (vocesEspañol.length > 0) {
+                voiceSelect.selectedIndex = indiceSeleccionadoPorDefecto;
+            }
+        }
+
+       
+        window.speechSynthesis.onvoiceschanged = cargarVoces;
+
+        // --- 3. MOTOR DE ESCUCHA CONTINUA ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        recognition.lang = 'es-CO'; 
+        recognition.continuous = true; 
+        recognition.interimResults = false; 
+
+        recognition.onstart = () => {
+            sistemaActivo = true;
+            btnListen.textContent = "Agustina Activa";
+            btnListen.classList.add("listening");
+            if (!asistenteHablando) statusText.textContent = "Esperando la palabra mágica...";
+        };
+
+        recognition.onresult = (event) => {
+            if (!sistemaActivo) return;
+
+            const current = event.resultIndex;
+            const transcriptOriginal = event.results[current][0].transcript;
+            const transcriptLimpio = transcriptOriginal.toLowerCase().replace(/[.,!?¿¡]/g, '').trim();
+
+            if (transcriptLimpio.includes("hola agustina")) {
+                const partes = transcriptLimpio.split("hola agustina");
+                const comando = partes[1].trim();
+
+                if (comando.length > 2) {
+                    procesarConElAgente(comando);
+                    esperandoComando = false;
+                } else {
+                    hablar("Hola, te escucho. ¿Qué necesitas?");
+                    esperandoComando = true; 
+                }
+            } else if (esperandoComando) {
+                procesarConElAgente(transcriptOriginal);
+                esperandoComando = false;
+            }
+        };
+
+        recognition.onend = () => {
+            // Solo reinicia la escucha si el sistema no fue detenido manualmente
+            if (sistemaActivo && !asistenteHablando) {
+                try { recognition.start(); } catch(e) {}
+            }
+        };
+
+        recognition.onerror = (event) => {
+            // Ignoramos errores menores de silencio continuo
+        };
+
+        // --- CONTROLES DE LOS BOTONES ---
+        btnListen.addEventListener('click', () => {
+            cargarVoces();
+            try { recognition.start(); } catch(e) {}
+        });
+
+        // NUEVO: Lógica del botón Detener
+        btnStop.addEventListener('click', () => {
+            // 1. Enmudece la voz al instante
+            window.speechSynthesis.cancel();
+            
+            // 2. Detiene el ciclo del micrófono
+            sistemaActivo = false;
+            asistenteHablando = false;
+            esperandoComando = false;
+            recognition.stop();
+            
+            // 3. Restaura la interfaz visual
+            btnListen.textContent = "Iniciar Sistema";
+            btnListen.classList.remove("listening");
+            statusText.textContent = "Sistema pausado. Presiona Iniciar para despertar a Agustina.";
+        });
+
+        // --- 4. CEREBRO DE AGUSTINA ---
+        async function procesarConElAgente(textoEntrada) {
+            statusText.innerHTML = `Tú: "${textoEntrada}"<br><br><em>Agustina está pensando...</em>`;
+            
+            try {
+                const respuesta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile", 
+                        messages: [
+                            {
+                                role: "system",
+                                content: "Eres Agustina, un asistente virtual inteligente y amable de la Institución Educativa San Agustín. Respondes de forma clara a cualquier consulta de conocimientos generales, ciencias, tecnología, historia o curiosidades. Tus respuestas deben ser precisas, conversacionales y directas, ideales para ser leídas en voz alta por un parlante. Evita listas largas o formatos complejos."
+                            },
+                            {
+                                role: "user",
+                                content: textoEntrada
+                            }
+                        ],
+                        max_tokens: 250,
+                        temperature: 0.7
+                    })
+                });
+
+                const datos = await respuesta.json();
+                
+                if (datos.error) {
+                    throw new Error("Clave inválida o caducada");
+                }
+
+                const textoIA = datos.choices[0].message.content;
+                statusText.innerHTML = `Tú: "${textoEntrada}"<br><br><span style="color: #f55036;">Agustina: "${textoIA}"</span>`;
+                hablar(textoIA);
+
+            } catch (error) {
+                statusText.innerHTML = `Error de conexión. <button onclick="localStorage.removeItem('groqApiKey'); location.reload();" style="padding: 5px 10px; font-size: 0.9rem; background: #dc3545;">Cambiar Clave API</button>`;
+            }
+        }
+
+        // --- 5. MOTOR DE VOZ ---
+        function hablar(texto) {
+            window.speechSynthesis.cancel();
+            
+            asistenteHablando = true;
+            recognition.stop();
+
+            const utterance = new SpeechSynthesisUtterance(texto);
+            
+            const indiceVozSeleccionada = voiceSelect.value;
+            if (vocesDisponibles[indiceVozSeleccionada]) {
+                utterance.voice = vocesDisponibles[indiceVozSeleccionada];
+            }
+
+            utterance.onend = () => {
+                asistenteHablando = false;
+                if (sistemaActivo) {
+                    try { recognition.start(); } catch(e) {}
+                    statusText.textContent = "Esperando la palabra mágica...";
+                }
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+    </script>
+</body>
+</html>
