@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Piano Web — Realismo, silencios y melodías</title>
+  <style>
+    :root{
+      --bg:#0f1115; --panel:#171a21; --panel2:#1e2230; --txt:#e8eaf0; --muted:#a7adbf;
+      --accent:#7c5cff; --accent2:#4ade80; --line:#2a2f3f;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt)}
+    .center{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+    .card{width:min(1340px,100%);background:linear-gradient(180deg,var(--panel),#121420);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+    h1{margin:0 0 8px;font-size:24px} h2{margin:0 0 8px;font-size:18px} p{margin:6px 0 14px;color:var(--muted);line-height:1.45}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:980px){.grid2{grid-template-columns:1fr}}
+    input[type="text"],select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px 12px;font-size:15px;outline:none}
+    input[type="range"]{width:220px}
+    button{background:var(--accent);border:none;color:#fff;padding:10px 14px;font-size:15px;border-radius:10px;cursor:pointer;font-weight:700}
+    button.secondary{background:#2a2f3f} button.good{background:var(--accent2);color:#09120b} button:disabled{opacity:.55;cursor:not-allowed}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#0e1017;color:var(--muted);font-size:12px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace}
+    .hint{font-size:13px;color:var(--muted)}
+    #status{margin-top:10px;color:var(--muted);font-size:13px}.status-ok{color:#9ae6b4}.status-warn{color:#fde68a}.status-bad{color:#fca5a5}
+    progress{width:100%;height:14px;margin-top:8px;appearance:none}progress::-webkit-progress-bar{background:#0b0d12;border-radius:999px;border:1px solid var(--line)}progress::-webkit-progress-value{background:linear-gradient(90deg,var(--accent),#8b5cf6);border-radius:999px}progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#8b5cf6);border-radius:999px}
+    #wrapGame{display:none;margin:12px}
+    .hud{display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:8px}.stats{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:14px}.stat b{color:var(--txt)}
+    #canvas{width:100%;background:#0b0d12;border:1px solid var(--line);border-radius:12px;display:block;margin:10px auto 8px}
+    #timelineWrap{background:#11131b;border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+    #timelineSvg{width:100%;height:150px;display:block}
+    #pianoWrap{position:relative;width:100%;margin-top:8px}
+    #pianoWhite{position:absolute;inset:0;display:flex;gap:1px;align-items:stretch}
+    .key.white{flex:1;position:relative;min-width:0;overflow:hidden;cursor:pointer;user-select:none;background:linear-gradient(to bottom,#fff 0%,#f7f7f7 35%,#ededed 70%,#d8d8d8 100%);border:1px solid #bcbcbc;border-radius:0 0 8px 8px;box-shadow:inset 0 -8px 14px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.9),0 6px 12px rgba(0,0,0,.25);transition:transform .05s ease,box-shadow .05s ease,background .05s ease}
+    .key.white::before{content:'';position:absolute;inset:0;background:linear-gradient(to right,rgba(255,255,255,.8),rgba(255,255,255,0) 28%,rgba(0,0,0,.03) 100%);pointer-events:none}
+    .key.white.pressed{transform:translateY(4px);background:linear-gradient(to bottom,#ececec 0%,#dcdcdc 100%);box-shadow:inset 0 6px 10px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(0,0,0,.2)}
+    #pianoBlack{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none}
+    .key.black{position:absolute;top:0;height:62%;width:calc(var(--white-width) * .62);background:linear-gradient(to bottom,#3e3e3e 0%,#181818 14%,#0d0d0d 60%,#202020 100%);border:1px solid #000;border-radius:0 0 6px 6px;z-index:5;box-shadow:inset 0 -6px 8px rgba(255,255,255,.08),inset 0 2px 3px rgba(255,255,255,.07),0 6px 10px rgba(0,0,0,.55);transform-origin:top center;transition:transform .05s ease,box-shadow .05s ease,background .05s ease;pointer-events:auto;cursor:pointer;user-select:none}
+    .key.black.pressed{transform:translateY(3px);background:linear-gradient(to bottom,#2c2c2c 0%,#050505 100%);box-shadow:inset 0 3px 5px rgba(255,255,255,.05),0 2px 4px rgba(0,0,0,.55)}
+    .keyLabel{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;font-size:11px;color:#111;font-weight:700;opacity:.8;pointer-events:none;white-space:nowrap;text-align:center}.keyLabel.blackLab{color:#f5f5f5;bottom:6px}.keyKbd{display:block;font-size:10px;opacity:.55}
+    @media (max-width:920px){.keyLabel{font-size:10px}.keyKbd{font-size:9px}}
+  </style>
+</head>
+<body>
+  <div id="start" class="center">
+    <div class="card">
+      <h1>🎹 Piano Web — realismo musical, silencios y melodías</h1>
+      <p>Esta versión retoma la línea de la v4, pero se centra en mayor realismo musical: las melodías incluyen silencios explícitos, duraciones más naturales, acordes, acompañamiento opcional y utilidades para descargar o cargar melodías propias en formato JSON.</p>
+      <div class="grid2">
+        <div>
+          <h2>Configuración</h2>
+          <div class="row">
+            <input id="playerName" type="text" placeholder="Tu nombre (opcional)" autocomplete="off" />
+            <select id="songSelect"></select>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <label class="hint">Acompañamiento</label>
+            <select id="accompanimentMode"><option value="on">Habilitado</option><option value="off">Deshabilitado</option></select>
+            <label class="hint">Autoplay</label>
+            <select id="autoplayMode"><option value="on">Habilitado</option><option value="off">Deshabilitado</option></select>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <label class="hint">Velocidad</label>
+            <input id="speed" type="range" min="0.1" max="2" step="0.1" value="1.0" />
+            <span id="speedVal" class="mono">1.0×</span>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <label class="hint">Volumen acompañamiento</label>
+            <input id="accVol" type="range" min="0" max="1" step="0.05" value="0.30" />
+            <span id="accVal" class="mono">30%</span>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button id="btnLoadAudio" class="good">Cargar audio</button>
+            <button id="btnLoadMelody" class="secondary">Cargar melodía</button>
+            <button id="btnStart" disabled>Abrir</button>
+            <input id="melodyFile" type="file" accept="application/json,.json" style="display:none" />
+          </div>
+          <div class="row" style="margin-top:12px">
+            <span class="badge">Formato de melodía JSON</span>
+            <span class="badge">Eventos + silencios + acordes</span>
+          </div>
+          <div id="status">Estado: <span id="statusText">No cargado</span></div>
+          <progress id="loadProgress" value="0" max="100"></progress>
+        </div>
+        <div>
+          <h2>Qué mejora respecto a la v4</h2>
+          <div class="row">
+            <span class="badge">silencios reales</span><span class="badge">duraciones más naturales</span><span class="badge">acordes</span><span class="badge">descargar melodía</span><span class="badge">cargar melodía</span>
+          </div>
+          <p style="margin-top:14px">Para el realismo, las melodías se describen como una secuencia de <span class="mono">eventos</span> con su <span class="mono">beat</span>, duración y notas. Los silencios aparecen simplemente como espacios entre un evento y el siguiente.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="wrapGame" class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <div style="font-size:14px;color:var(--muted)">Jugador: <b id="hudName" style="color:var(--txt)"></b></div>
+        <div style="font-size:14px;color:var(--muted)">Melodía: <b id="hudSong" style="color:var(--txt)"></b></div>
+        <div style="font-size:14px;color:var(--muted)">Descripción: <b id="hudDesc" style="color:var(--txt)"></b></div>
+      </div>
+      <div class="row">
+        <button id="btnPlay">▶️ Reproducir</button>
+        <button id="btnPause" class="secondary">⏸ Pausar</button>
+        <button id="btnStop" class="secondary">⏹ Detener</button>
+        <button id="btnDownloadMelody" class="secondary">⬇️ Descargar melodía</button>
+        <button id="btnBack" class="secondary">Volver</button>
+      </div>
+    </div>
+
+    <div class="hud">
+      <div class="stats">
+        <span class="stat">⏱ Tiempo: <b id="hudTime">0.00</b>s</span>
+        <span class="stat">🎼 Evento actual: <b id="hudEvent">0</b></span>
+        <span class="stat">🎹 Teclas visibles: <b id="hudKeys">0</b></span>
+      </div>
+      <div class="hint">La línea de tiempo muestra eventos y silencios. Los huecos entre bloques son silencios musicales.</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    <div id="timelineWrap"><svg id="timelineSvg" viewBox="0 0 1200 150" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div id="pianoWrap"><div id="pianoWhite"></div><div id="pianoBlack"></div></div>
+  </div>
+
+<script>
+/* =========================
+   Utilidades musicales
+========================= */
+const KEYBOARD_MAP=["a","w","s","e","d","f","t","g","y","h","u","j","k","o","l","p"];
+const SEMITONES={"C":0,"C#":1,"D":2,"D#":3,"E":4,"F":5,"F#":6,"G":7,"G#":8,"A":9,"A#":10,"B":11};
+const NOTE_INFO={"C":{type:'white'},"C#":{type:'black'},"D":{type:'white'},"D#":{type:'black'},"E":{type:'white'},"F":{type:'white'},"F#":{type:'black'},"G":{type:'white'},"G#":{type:'black'},"A":{type:'white'},"A#":{type:'black'},"B":{type:'white'}};
+const SOLFEGE={"C":"Do","C#":"Do♯","D":"Re","D#":"Re♯","E":"Mi","F":"Fa","F#":"Fa♯","G":"Sol","G#":"Sol♯","A":"La","A#":"La♯","B":"Si"};
+function noteToMidi(note){const m=note.match(/^([A-G]#?)(-?\d+)$/);if(!m)return 60;return(parseInt(m[2],10)+1)*12+SEMITONES[m[1]]}
+function midiToFreq(midi){return 440*Math.pow(2,(midi-69)/12)}
+function noteToFreq(note){return midiToFreq(noteToMidi(note))}
+function midiToNote(midi){const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];return names[midi%12]+(Math.floor(midi/12)-1)}
+function baseName(note){return note.replace(/-?\d+$/,'')}
+function noteDisplayName(note){return SOLFEGE[baseName(note)]||baseName(note)}
+function isBlack(note){return NOTE_INFO[baseName(note)].type==='black'}
+function isWhite(note){return !isBlack(note)}
+function buildChromaticRange(startNote,endNote){const out=[];for(let m=noteToMidi(startNote);m<=noteToMidi(endNote);m++)out.push(midiToNote(m));return out}
+const FULL_NOTE_POOL=buildChromaticRange('A2','C7');
+let visibleNotes=[],visibleWhiteNotes=[],keyboardMapVisible=new Map(),noteKeyMeta=new Map(),keyElsByNote=new Map();
+
+/* =========================
+   Melodías con silencios y realismo
+   Formato JSON soportado:
+   {
+     "id": "mi_melodia",
+     "title": "Mi melodía",
+     "description": "texto opcional",
+     "bpm": 92,
+     "offset": 0.8,
+     "events": [
+       {"beat":0,"durationBeats":1,"notes":["C4","E4","G4"]},
+       {"beat":2.5,"durationBeats":0.5,"notes":["E4"]}
+     ],
+     "accompaniment": {... opcional ...}
+   }
+========================= */
+function ev(beat,durationBeats,notes){return {beat,durationBeats,notes}}
+const BUILTIN_SONGS=[
+  {
+    id:'fur_elise_realista',
+    title:'Für Elise — fragmento con silencios',
+    description:'Melodía expresiva con pequeñas pausas entre motivos y duraciones menos mecánicas.',
+    bpm:112,
+    offset:0.8,
+    events:[
+      ev(0,0.45,['E5']), ev(0.7,0.35,['D#5']), ev(1.2,0.5,['E5']), ev(1.9,0.35,['D#5']), ev(2.4,0.7,['E5']),
+      ev(3.6,0.6,['B4']), ev(4.4,0.55,['D5']), ev(5.1,0.55,['C5']), ev(5.9,1.1,['A4']),
+      ev(8.0,0.7,['C4','E4','A4']), ev(9.1,0.65,['B4']), ev(10.0,0.65,['E4','G#4','B4']), ev(11.0,0.9,['C5']),
+      ev(13.2,0.45,['E5']), ev(13.9,0.35,['D#5']), ev(14.4,0.55,['E5']), ev(15.2,0.35,['D#5']), ev(15.8,0.8,['E5']),
+      ev(17.0,0.65,['B4']), ev(17.9,0.55,['D5']), ev(18.7,0.55,['C5']), ev(19.6,1.2,['A4'])
+    ],
+    accompaniment:{
+      base:[
+        {beat:0,type:'bass',note:'A2',durationBeats:1.5},
+        {beat:2,type:'bass',note:'E3',durationBeats:1.2},
+        {beat:4,type:'chord',notes:['A3','C4','E4'],durationBeats:1.6},
+        {beat:6,type:'bass',note:'E3',durationBeats:1.2}
+      ],
+      repeatBeats:8
+    }
+  },
+  {
+    id:'chords_realistas',
+    title:'Progresión realista con acordes y silencios',
+    description:'Acordes amplios con respiración musical entre eventos.',
+    bpm:78,
+    offset:0.8,
+    events:[
+      ev(0,2.2,['D4','F#4','A4']), ev(3,1.8,['A3','C#4','E4']), ev(5.5,2.1,['B3','D4','F#4']), ev(8,2.0,['F#3','A3','C#4']),
+      ev(11,2.0,['G3','B3','D4']), ev(14,1.8,['D3','F#3','A3']), ev(16.5,2.0,['G3','B3','D4']), ev(19,2.2,['A3','C#4','E4'])
+    ],
+    accompaniment:{
+      base:[
+        {beat:0,type:'bass',note:'D2',durationBeats:2},
+        {beat:3,type:'bass',note:'A1',durationBeats:1.8},
+        {beat:5.5,type:'bass',note:'B1',durationBeats:2},
+        {beat:8,type:'bass',note:'F#1',durationBeats:2}
+      ],
+      repeatBeats:11
+    }
+  },
+  {
+    id:'melodia_cargable_demo',
+    title:'Demo de melodía cargable',
+    description:'Ejemplo simple para exportar y luego volver a cargar como JSON.',
+    bpm:92,
+    offset:0.8,
+    events:[
+      ev(0,1,['C4','E4','G4']), ev(1.5,0.5,['E4']), ev(2.5,1,['F4','A4','C5']), ev(4,0.75,['A4']),
+      ev(5.5,1,['G4','B4','D5']), ev(7.5,1.2,['C4','E4','G4'])
+    ],
+    accompaniment:{
+      base:[
+        {beat:0,type:'bass',note:'C2',durationBeats:1.2},
+        {beat:2.5,type:'bass',note:'F2',durationBeats:1.0},
+        {beat:5.5,type:'bass',note:'G2',durationBeats:1.0}
+      ],
+      repeatBeats:8
+    }
+  }
+];
+let customSongs=[];
+function allSongs(){ return [...BUILTIN_SONGS, ...customSongs]; }
+const songSelect=document.getElementById('songSelect');
+function refreshSongSelect(selectedId){
+  songSelect.innerHTML='';
+  for(const s of allSongs()){
+    const o=document.createElement('option'); o.value=s.id; o.textContent=s.title; songSelect.appendChild(o);
+  }
+  songSelect.value=selectedId || allSongs()[0].id;
+}
+refreshSongSelect('fur_elise_realista');
+
+/* =========================
+   Audio híbrido multicapa
+========================= */
+let audioCtx=null,master=null,dry=null,wet=null,reverb=null,hybridMode='unknown';
+const statusText=document.getElementById('statusText'),loadProgress=document.getElementById('loadProgress');
+const SAMPLE_LAYERS={
+  v1:{candidates:['https://unpkg.com/@audio-samples/piano-velocity1@1.0.5/audio/','https://cdn.jsdelivr.net/npm/@audio-samples/piano-velocity1@1.0.5/audio/'],num:1},
+  v3:{candidates:['https://unpkg.com/@audio-samples/piano-velocity3@1.0.5/audio/','https://cdn.jsdelivr.net/npm/@audio-samples/piano-velocity3@1.0.5/audio/'],num:3},
+  v8:{candidates:['https://unpkg.com/@audio-samples/piano-velocity8@1.0.5/audio/','https://cdn.jsdelivr.net/npm/@audio-samples/piano-velocity8@1.0.5/audio/'],num:8},
+  v12:{candidates:['https://unpkg.com/@audio-samples/piano-velocity12@1.0.5/audio/','https://cdn.jsdelivr.net/npm/@audio-samples/piano-velocity12@1.0.5/audio/'],num:12},
+  v16:{candidates:['https://unpkg.com/@audio-samples/piano-velocity16@1.0.5/audio/','https://cdn.jsdelivr.net/npm/@audio-samples/piano-velocity16@1.0.5/audio/'],num:16}
+};
+const BASE_SAMPLES=['A3','C4','D#4','F#4','A4','C5','D#5','F#5'];
+const sampleBuffers={v1:new Map(),v3:new Map(),v8:new Map(),v12:new Map(),v16:new Map()};
+function ensureAudio(){if(audioCtx)return;audioCtx=new(window.AudioContext||window.webkitAudioContext)();master=audioCtx.createGain();master.gain.value=.95;dry=audioCtx.createGain();dry.gain.value=.95;wet=audioCtx.createGain();wet.gain.value=.22;reverb=audioCtx.createConvolver();reverb.buffer=makeImpulseResponse(2.4,2.2);reverb.normalize=true;dry.connect(master);reverb.connect(wet);wet.connect(master);master.connect(audioCtx.destination)}
+function makeImpulseResponse(seconds,decay){const rate=audioCtx.sampleRate,length=Math.floor(rate*seconds),buffer=audioCtx.createBuffer(2,length,rate);for(let ch=0;ch<2;ch++){const data=buffer.getChannelData(ch);for(let i=0;i<length;i++){const t=i/length,env=Math.pow(1-t,decay);data[i]=(Math.random()*2-1)*env*0.48}}return buffer}
+function encodeSampleFile(note,layerNum){return encodeURIComponent(note)+'v'+layerNum+'.ogg'}
+function chooseBaseSample(targetNote){const target=noteToMidi(targetNote);let best=BASE_SAMPLES[0],dist=Infinity;for(const b of BASE_SAMPLES){const d=Math.abs(target-noteToMidi(b));if(d<dist){dist=d;best=b}}return best}
+function playbackRateFor(target,base){return Math.pow(2,(noteToMidi(target)-noteToMidi(base))/12)}
+function chooseLayerByVelocity(v){if(v<0.25)return 'v1';if(v<0.45)return 'v3';if(v<0.70)return 'v8';if(v<0.88)return 'v12';return 'v16'}
+function fallbackLayers(layer){const order=['v1','v3','v8','v12','v16'];const idx=order.indexOf(layer);if(idx===-1)return order;return [...order.slice(idx).reverse(),...order.slice(0,idx).reverse()]}
+async function fetchArrayBuffer(url){const res=await fetch(url,{mode:'cors',cache:'force-cache'});if(!res.ok)throw new Error(`HTTP ${res.status} en ${url}`);return await res.arrayBuffer()}
+async function loadSampleFromCandidates(candidates){let lastError=null;for(const url of candidates){try{return await fetchArrayBuffer(url)}catch(err){lastError=err;console.warn('Intento fallido:',url,err)}}throw lastError||new Error('No se pudo cargar sample')}
+function buildSampleJobs(){const jobs=[];for(const [layerKey,layerDef] of Object.entries(SAMPLE_LAYERS)){for(const note of BASE_SAMPLES){const file=encodeSampleFile(note,layerDef.num);jobs.push({layerKey,note,urls:layerDef.candidates.map(base=>base+file)})}}return jobs}
+async function loadSingleSample(job){const arr=await loadSampleFromCandidates(job.urls);const buf=await audioCtx.decodeAudioData(arr);sampleBuffers[job.layerKey].set(job.note,buf);return true}
+async function runJobsInParallelBatches(jobs,batchSize,onProgress){let completed=0,failed=[];for(let i=0;i<jobs.length;i+=batchSize){const batch=jobs.slice(i,i+batchSize);const results=await Promise.allSettled(batch.map(job=>loadSingleSample(job)));results.forEach((result,idx)=>{const job=batch[idx];completed++;if(result.status==='rejected'){failed.push({job,error:result.reason});console.error('Fallo sample:',job.urls,result.reason)}if(onProgress)onProgress(completed,jobs.length)})}return {completed,failed}}
+async function loadSamplesHybridParallel(){ensureAudio();await audioCtx.resume();const jobs=buildSampleJobs(),total=jobs.length,BATCH_SIZE=8;if(loadProgress){loadProgress.value=0;loadProgress.max=100}statusText.className='';statusText.textContent=`Cargando audio (${total} archivos)...`;const {failed}=await runJobsInParallelBatches(jobs,BATCH_SIZE,(done,totalCount)=>{const percent=Math.round((done/totalCount)*100);statusText.textContent=`Cargando audio... ${done}/${totalCount} (${percent}%)`;if(loadProgress)loadProgress.value=percent});const totalLoaded=Object.values(sampleBuffers).reduce((sum,map)=>sum+map.size,0);if(totalLoaded===0){hybridMode='synth';statusText.className='status-bad';statusText.textContent='No se cargó ningún sample. Se activó el synth interno.'}else if(failed.length>0){hybridMode='partial';statusText.className='status-warn';statusText.textContent=`Audio parcial: ${totalLoaded} samples cargados. Los demás usarán synth interno.`}else{hybridMode='samples';statusText.className='status-ok';statusText.textContent='OK — audio online cargado ✅'}if(loadProgress)loadProgress.value=100;document.getElementById('btnStart').disabled=false}
+function playSynthFallback(note,whenAudioTime,velocity=.9,duration=.45){ensureAudio();const freq=noteToFreq(note),midi=noteToMidi(note),isLow=midi<noteToMidi('C4');const osc1=audioCtx.createOscillator(),osc2=audioCtx.createOscillator(),g=audioCtx.createGain(),lp=audioCtx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=Math.min(5200,900+freq*2.2);osc1.type='triangle';osc2.type='sine';osc1.frequency.value=freq;osc2.frequency.value=freq*2;const t=whenAudioTime,attack=.003,hold=Math.max(.22,duration*(isLow?1.25:1.05)),release=Math.max(isLow?1.8:1.25,duration*(isLow?2.2:1.7));g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(velocity,t+attack);g.gain.setValueAtTime(velocity,t+hold);g.gain.exponentialRampToValueAtTime(.0001,t+hold+release);osc1.connect(lp);osc2.connect(lp);lp.connect(g);g.connect(dry);g.connect(reverb);osc1.start(t);osc2.start(t);const stopAt=t+hold+release+.18;osc1.stop(stopAt);osc2.stop(stopAt)}
+function playHybridNote(note,whenAudioTime,velocity=.9,duration=.45){ensureAudio();const preferredLayer=chooseLayerByVelocity(velocity),base=chooseBaseSample(note);let chosenBuffer=null;for(const layer of fallbackLayers(preferredLayer)){const buf=sampleBuffers[layer].get(base);if(buf){chosenBuffer=buf;break}}if(!chosenBuffer){playSynthFallback(note,whenAudioTime,velocity,duration);return}const src=audioCtx.createBufferSource();src.buffer=chosenBuffer;src.playbackRate.value=playbackRateFor(note,base);const g=audioCtx.createGain(),midi=noteToMidi(note),isLow=midi<noteToMidi('C4'),hold=Math.max(.50,duration*(isLow?2.0:1.45)),release=Math.max(isLow?2.1:1.45,duration*(isLow?2.7:2.1)),level=Math.max(0,Math.min(1,velocity));g.gain.setValueAtTime(.0001,whenAudioTime);g.gain.linearRampToValueAtTime(level,whenAudioTime+.008);g.gain.setValueAtTime(level,whenAudioTime+hold);g.gain.exponentialRampToValueAtTime(.0001,whenAudioTime+hold+release);src.connect(g);g.connect(dry);g.connect(reverb);src.start(whenAudioTime);const naturalMax=whenAudioTime+chosenBuffer.duration/Math.max(.20,src.playbackRate.value);const stopAt=Math.min(whenAudioTime+hold+release+.65,naturalMax);src.stop(stopAt)}
+function playChord(notes,whenAudioTime,velocity=.82,duration=.8){ for(const n of notes) playHybridNote(n,whenAudioTime,velocity,duration) }
+
+/* =========================
+   Estado, eventos y silencios
+========================= */
+let appConfig={accompanimentMode:'on',autoplay:true};
+let speed=1.0,t0Audio=0,t0Game=0,currentSong=null,events=[],running=false,userPaused=false,raf=null,accEvents=[],accIndex=0,accVol=.30,currentEventIndex=0;
+function getGameTime(){return t0Game+(audioCtx.currentTime-t0Audio)*speed}
+function setSpeed(newSpeed){const nowA=audioCtx.currentTime,nowG=getGameTime();t0Audio=nowA;t0Game=nowG;speed=newSpeed}
+function gameToAudioTime(gameT){return t0Audio+(gameT-t0Game)/speed}
+function buildEvents(song){events=song.events.map((e,idx)=>({id:idx,notes:e.notes,time:song.offset+beatsToSeconds(e.beat,song.bpm),duration:beatsToSeconds(e.durationBeats,song.bpm),scheduled:false}))}
+function buildAccEvents(song){accEvents=[];accIndex=0;if(!song||!song.accompaniment)return;const bpm=song.bpm,base=song.accompaniment.base||[],repeatBeats=song.accompaniment.repeatBeats||4;const lastBeat=song.events.length?song.events[song.events.length-1].beat:0;const totalBeats=lastBeat+8;for(let start=0;start<=totalBeats;start+=repeatBeats){for(const ev of base){const tBeat=start+ev.beat;accEvents.push({time:song.offset+beatsToSeconds(tBeat,bpm),duration:beatsToSeconds(ev.durationBeats||1,bpm),type:ev.type,note:ev.note,notes:ev.notes})}}accEvents.sort((a,b)=>a.time-b.time)}
+function scheduleAcc(){if(userPaused||appConfig.accompanimentMode==='off')return;const gt=getGameTime();while(accIndex<accEvents.length&&accEvents[accIndex].time<=gt+0.45){const ev=accEvents[accIndex++],at=gameToAudioTime(ev.time);if(ev.type==='bass')playHybridNote(ev.note,at,0.18+accVol*0.22,ev.duration);else if(ev.type==='chord')playChord(ev.notes,at,0.12+accVol*0.16,ev.duration)}}
+function scheduleAutoplay(){if(!appConfig.autoplay||userPaused)return;const gt=getGameTime();for(const ev of events){if(!ev.scheduled&&ev.time<=gt+0.25){ev.scheduled=true;const at=gameToAudioTime(ev.time);playChord(ev.notes,at,.84,ev.duration);for(const n of ev.notes){const now=audioCtx.currentTime;const ms=Math.max(0,(at-now)*1000);setTimeout(()=>pressKeyVisual(n,Math.max(240,ev.duration*1200/Math.max(.1,speed))),ms)}}}}
+function currentPlaybackIndex(){const gt=getGameTime();let idx=0;for(let i=0;i<events.length;i++){if(events[i].time<=gt+.05) idx=i}return idx}
+function resetPlayback(){t0Audio=audioCtx.currentTime;t0Game=0;accIndex=0;currentEventIndex=0;for(const e of events)e.scheduled=false;document.getElementById('hudTime').textContent='0.00';document.getElementById('hudEvent').textContent='0';renderTimeline()}
+
+/* =========================
+   Piano dinámico y responsive
+========================= */
+const pianoWhite=document.getElementById('pianoWhite'),pianoBlack=document.getElementById('pianoBlack');
+function songRange(){if(!currentSong) return {min:noteToMidi('C4'),max:noteToMidi('C5')};const mids=currentSong.events.flatMap(e=>e.notes.map(noteToMidi));return{min:Math.min(...mids),max:Math.max(...mids)}}
+function countWhiteInRange(startIdx,endIdx){let count=0;for(let i=startIdx;i<endIdx;i++)if(isWhite(FULL_NOTE_POOL[i]))count++;return count}
+function computeVisibleNotes(){const wrap=document.getElementById('pianoWrap');const wrapWidth=wrap.getBoundingClientRect().width||window.innerWidth-32;const minWhitePx=window.innerWidth<640?34:44;let fitWhiteCount=Math.max(7,Math.floor(wrapWidth/minWhitePx));const {min,max}=songRange();let startIdx=FULL_NOTE_POOL.indexOf(midiToNote(min))-2;let endIdx=FULL_NOTE_POOL.indexOf(midiToNote(max))+3;startIdx=Math.max(0,startIdx);endIdx=Math.min(FULL_NOTE_POOL.length,endIdx);while(countWhiteInRange(startIdx,endIdx)<fitWhiteCount){if(startIdx>0)startIdx--;if(countWhiteInRange(startIdx,endIdx)>=fitWhiteCount)break;if(endIdx<FULL_NOTE_POOL.length)endIdx++;if(startIdx===0&&endIdx===FULL_NOTE_POOL.length)break}visibleNotes=FULL_NOTE_POOL.slice(startIdx,endIdx);visibleWhiteNotes=visibleNotes.filter(isWhite);keyboardMapVisible=new Map();if(visibleNotes.length<=KEYBOARD_MAP.length){visibleNotes.forEach((n,i)=>{if(i<KEYBOARD_MAP.length)keyboardMapVisible.set(n,KEYBOARD_MAP[i])})}else{const center=Math.floor(visibleNotes.length/2);let start=Math.max(0,center-Math.floor(KEYBOARD_MAP.length/2));if(start+KEYBOARD_MAP.length>visibleNotes.length)start=visibleNotes.length-KEYBOARD_MAP.length;for(let i=0;i<KEYBOARD_MAP.length;i++)keyboardMapVisible.set(visibleNotes[start+i],KEYBOARD_MAP[i])}}
+function buildPianoUI(){computeVisibleNotes();pianoWhite.innerHTML='';pianoBlack.innerHTML='';keyElsByNote=new Map();noteKeyMeta.clear();visibleWhiteNotes.forEach(note=>{const el=document.createElement('div');el.className='key white';el.dataset.note=note;const key=keyboardMapVisible.get(note);const lab=document.createElement('div');lab.className='keyLabel';lab.innerHTML=`${noteDisplayName(note)}${key?`<span class="keyKbd">${key.toUpperCase()}</span>`:''}`;el.appendChild(lab);el.addEventListener('mousedown',()=>{pressKeyVisual(note);playHybridNote(note,audioCtx.currentTime+.003,.96,.9)});el.addEventListener('touchstart',(ev)=>{ev.preventDefault();pressKeyVisual(note);playHybridNote(note,audioCtx.currentTime+.003,.96,.9)},{passive:false});pianoWhite.appendChild(el);keyElsByNote.set(note,el)});requestAnimationFrame(()=>{const whiteEls=Array.from(pianoWhite.children);if(!whiteEls.length)return;const whiteWidth=whiteEls[0].getBoundingClientRect().width;document.getElementById('pianoWrap').style.setProperty('--white-width',`${whiteWidth}px`);for(const note of visibleNotes){if(!isBlack(note))continue;const prevWhite=midiToNote(noteToMidi(note)-1);const prevEl=keyElsByNote.get(prevWhite);if(!prevEl)continue;const wrapRect=document.getElementById('pianoWrap').getBoundingClientRect();const prevRect=prevEl.getBoundingClientRect();const left=(prevRect.left-wrapRect.left)+prevRect.width*.66;const el=document.createElement('div');el.className='key black';el.dataset.note=note;el.style.left=`${left}px`;const key=keyboardMapVisible.get(note);const lab=document.createElement('div');lab.className='keyLabel blackLab';lab.innerHTML=`${noteDisplayName(note)}${key?`<span class="keyKbd">${key.toUpperCase()}</span>`:''}`;el.appendChild(lab);el.addEventListener('mousedown',()=>{pressKeyVisual(note);playHybridNote(note,audioCtx.currentTime+.003,.96,.9)});el.addEventListener('touchstart',(ev)=>{ev.preventDefault();pressKeyVisual(note);playHybridNote(note,audioCtx.currentTime+.003,.96,.9)},{passive:false});pianoBlack.appendChild(el);keyElsByNote.set(note,el)}recalcLayout()});document.getElementById('hudKeys').textContent=visibleNotes.length}
+function pressKeyVisual(note,holdMs=180){const el=keyElsByNote.get(note);if(!el)return;el.classList.add('pressed');setTimeout(()=>el.classList.remove('pressed'),holdMs)}
+function recalcLayout(){const canvasRect=canvas.getBoundingClientRect();noteKeyMeta.clear();for(const note of visibleNotes){const el=keyElsByNote.get(note);if(!el)continue;const r=el.getBoundingClientRect();noteKeyMeta.set(note,{x:r.left-canvasRect.left,w:r.width,isBlack:isBlack(note)})}}
+function adjustViewportLayout(){const vh=window.innerHeight;const canvasH=Math.max(170,Math.min(420,Math.floor(vh*0.32)));const pianoH=Math.max(120,Math.min(210,Math.floor(vh*0.22)));const timelineH=Math.max(110,Math.min(170,Math.floor(vh*0.18)));canvas.style.height=`${canvasH}px`;document.getElementById('pianoWrap').style.height=`${pianoH}px`;document.getElementById('timelineSvg').style.height=`${timelineH}px`}
+window.addEventListener('resize',()=>{if(document.getElementById('wrapGame').style.display!=='none'){adjustViewportLayout();buildPianoUI();renderTimeline();setTimeout(recalcLayout,60)}})
+
+/* =========================
+   Canvas principal (notas cayendo)
+========================= */
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+const LOOKAHEAD=2.8;
+function draw(){const rect=canvas.getBoundingClientRect();const w=rect.width,h=rect.height;const dpr=window.devicePixelRatio||1;canvas.width=Math.max(1,Math.floor(w*dpr));canvas.height=Math.max(1,Math.floor(h*dpr));ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);visibleNotes.forEach(note=>{const meta=noteKeyMeta.get(note);if(!meta)return;ctx.fillStyle=meta.isBlack?'#0a0c12':'#0f1320';ctx.fillRect(meta.x,0,meta.w,h);ctx.strokeStyle=meta.isBlack?'#151922':'#1f2536';ctx.strokeRect(meta.x,0,meta.w,h)});const hitY=h-72;ctx.fillStyle='rgba(255,255,255,.07)';ctx.fillRect(0,hitY-18,w,36);ctx.strokeStyle='rgba(255,255,255,.15)';ctx.beginPath();ctx.moveTo(0,hitY);ctx.lineTo(w,hitY);ctx.stroke();const t=getGameTime();for(const ev of events){const dt=ev.time-t;if(dt<-1||dt>LOOKAHEAD)continue;for(const note of ev.notes){const meta=noteKeyMeta.get(note);if(!meta)continue;const y=hitY-(dt/LOOKAHEAD)*(hitY-20);const pad=meta.isBlack?Math.max(2,meta.w*.10):Math.max(2,meta.w*.06);const noteX=meta.x+pad,noteW=meta.w-pad*2,noteH=Math.max(18,Math.min(100,ev.duration*150));ctx.fillStyle=ev.scheduled?'rgba(34,197,94,.92)':(meta.isBlack?'rgba(244,114,182,.96)':'rgba(248,113,113,.96)');ctx.fillRect(noteX,y-noteH/2,noteW,noteH);ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(noteX,y-noteH/2,noteW,Math.min(6,noteH*.22));ctx.fillStyle='rgba(0,0,0,.72)';ctx.font='12px ui-monospace, monospace';ctx.textBaseline='middle';ctx.fillText(noteDisplayName(note),noteX+6,y)}}}
+
+/* =========================
+   Línea de tiempo con silencios
+========================= */
+const timelineSvg=document.getElementById('timelineSvg');
+function addSvg(tag, attrs, parent){const el=document.createElementNS('http://www.w3.org/2000/svg',tag); for(const [k,v] of Object.entries(attrs||{})) el.setAttribute(k,v); (parent||timelineSvg).appendChild(el); return el; }
+function renderTimeline(){
+  timelineSvg.innerHTML='';
+  const width=1200,height=150; timelineSvg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+  addSvg('rect',{x:0,y:0,width,height,fill:'#11131b'},timelineSvg);
+  const left=40,right=1160,mid=70; addSvg('line',{x1:left,y1:mid,x2:right,y2:mid,stroke:'#374151','stroke-width':2},timelineSvg);
+  if(!currentSong) return;
+  const totalBeats=currentSong.events.length? currentSong.events[currentSong.events.length-1].beat + currentSong.events[currentSong.events.length-1].durationBeats : 1;
+  const beatWidth=(right-left)/Math.max(1,totalBeats);
+  for(let b=0;b<=totalBeats;b+=1){ addSvg('line',{x1:left+b*beatWidth,y1:mid-20,x2:left+b*beatWidth,y2:mid+20,stroke:'#202532','stroke-width':1},timelineSvg); }
+  // bloques = eventos; huecos = silencios
+  currentSong.events.forEach((ev,idx)=>{
+    const x=left + ev.beat*beatWidth;
+    const w=Math.max(8, ev.durationBeats*beatWidth);
+    const active=idx===currentEventIndex;
+    addSvg('rect',{x,y:mid-18,width:w,height:36,rx:8,fill:active?'#22c55e':'#ef4444',opacity:'0.95'},timelineSvg);
+    addSvg('text',{x:x+w/2,y:mid+4,fill:'#fff','font-size':12,'text-anchor':'middle'},timelineSvg).textContent=ev.notes.map(noteDisplayName).join(' · ');
+  });
+  const playX=left + (Math.min(totalBeats, Math.max(0, ((getGameTime() - currentSong.offset) / (60/currentSong.bpm)) )))*beatWidth;
+  addSvg('line',{x1:playX,y1:20,x2:playX,y2:130,stroke:'#93c5fd','stroke-width':2},timelineSvg);
+}
+
+/* =========================
+   Reproducción y control
+========================= */
+function loop(){if(!running)return;scheduleAcc();scheduleAutoplay();draw();currentEventIndex=currentPlaybackIndex();renderTimeline();document.getElementById('hudTime').textContent=getGameTime().toFixed(2);document.getElementById('hudEvent').textContent=currentEventIndex+1;raf=requestAnimationFrame(loop)}
+function startEngine(){audioCtx.resume();running=true;if(raf)cancelAnimationFrame(raf);loop()}
+function stopEngine(){running=false;if(raf)cancelAnimationFrame(raf);raf=null}
+function togglePause(){if(!audioCtx)return;userPaused=!userPaused;const btn=document.getElementById('btnPause');if(userPaused){audioCtx.suspend();btn.textContent='▶️ Reanudar'}else{const nowA=audioCtx.currentTime,nowG=getGameTime();t0Audio=nowA;t0Game=nowG;audioCtx.resume();btn.textContent='⏸ Pausar';if(!running)startEngine()}}
+
+/* =========================
+   Cargar / descargar melodías
+========================= */
+function getCurrentSong(){ return allSongs().find(s=>s.id===songSelect.value) || allSongs()[0]; }
+function sanitizeLoadedSong(raw){
+  if(!raw || typeof raw !== 'object') throw new Error('El archivo no contiene un objeto JSON válido.');
+  if(!Array.isArray(raw.events) || !raw.events.length) throw new Error('La melodía necesita un arreglo "events" con al menos un evento.');
+  const song={
+    id: String(raw.id || ('custom_' + Date.now())),
+    title: String(raw.title || 'Melodía cargada'),
+    description: String(raw.description || 'Melodía personalizada cargada desde archivo.'),
+    bpm: Number(raw.bpm || 90),
+    offset: Number(raw.offset ?? 0.8),
+    events: raw.events.map((e,idx)=>({
+      beat: Number(e.beat ?? idx),
+      durationBeats: Number(e.durationBeats ?? 1),
+      notes: Array.isArray(e.notes) ? e.notes.map(String) : [String(e.note || 'C4')]
+    }))
+  };
+  if(raw.accompaniment && typeof raw.accompaniment === 'object') song.accompaniment=raw.accompaniment;
+  return song;
+}
+function downloadCurrentMelody(){
+  const song=getCurrentSong();
+  const json=JSON.stringify(song,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`${song.id || 'melodia'}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+async function loadMelodyFromFile(file){
+  const text=await file.text();
+  const parsed=JSON.parse(text);
+  const song=sanitizeLoadedSong(parsed);
+  const existingIndex=customSongs.findIndex(s=>s.id===song.id);
+  if(existingIndex>=0) customSongs[existingIndex]=song; else customSongs.push(song);
+  refreshSongSelect(song.id);
+  statusText.className='status-ok';
+  statusText.textContent=`Melodía cargada: ${song.title}`;
+}
+
+/* =========================
+   UI
+========================= */
+const btnLoadAudio=document.getElementById('btnLoadAudio'),btnLoadMelody=document.getElementById('btnLoadMelody'),btnStart=document.getElementById('btnStart');
+const btnPlay=document.getElementById('btnPlay'),btnPause=document.getElementById('btnPause'),btnStop=document.getElementById('btnStop'),btnBack=document.getElementById('btnBack'),btnDownloadMelody=document.getElementById('btnDownloadMelody');
+const melodyFile=document.getElementById('melodyFile');
+const speedSlider=document.getElementById('speed'),speedVal=document.getElementById('speedVal'),accSlider=document.getElementById('accVol'),accVal=document.getElementById('accVal');
+const accompanimentModeSel=document.getElementById('accompanimentMode'),autoplayModeSel=document.getElementById('autoplayMode');
+btnLoadAudio.addEventListener('click',async()=>{try{ensureAudio();await loadSamplesHybridParallel()}catch(err){console.error(err);statusText.className='status-bad';statusText.textContent='Error al cargar audio. Se usará synth interno.';hybridMode='synth';btnStart.disabled=false;if(loadProgress)loadProgress.value=100}});
+btnLoadMelody.addEventListener('click',()=>melodyFile.click());
+melodyFile.addEventListener('change',async(ev)=>{const file=ev.target.files?.[0]; if(!file) return; try{await loadMelodyFromFile(file)}catch(err){console.error(err);statusText.className='status-bad';statusText.textContent='No se pudo cargar la melodía: ' + err.message} finally { melodyFile.value=''; }});
+speedSlider.addEventListener('input',()=>{const v=parseFloat(speedSlider.value);speedVal.textContent=v.toFixed(1)+'×';if(audioCtx)setSpeed(v)});
+accSlider.addEventListener('input',()=>{accVol=parseFloat(accSlider.value);accVal.textContent=Math.round(accVol*100)+'%'});
+accompanimentModeSel.addEventListener('change',()=>{appConfig.accompanimentMode=accompanimentModeSel.value});
+autoplayModeSel.addEventListener('change',()=>{appConfig.autoplay=autoplayModeSel.value==='on'});
+btnStart.addEventListener('click',()=>{
+  let name=document.getElementById('playerName').value.trim(); if(!name) name='Invitado';
+  currentSong=getCurrentSong();
+  buildEvents(currentSong); buildAccEvents(currentSong);
+  document.getElementById('start').style.display='none'; document.getElementById('wrapGame').style.display='block';
+  document.getElementById('hudName').textContent=name; document.getElementById('hudSong').textContent=currentSong.title; document.getElementById('hudDesc').textContent=currentSong.description || '—';
+  ensureAudio(); setSpeed(parseFloat(speedSlider.value)); accVol=parseFloat(accSlider.value); accVal.textContent=Math.round(accVol*100)+'%';
+  appConfig.accompanimentMode=accompanimentModeSel.value; appConfig.autoplay=autoplayModeSel.value==='on';
+  adjustViewportLayout(); buildPianoUI(); resetPlayback(); startEngine();
+});
+btnPlay.addEventListener('click',()=>{ if(!audioCtx) return; userPaused=false; btnPause.textContent='⏸ Pausar'; const nowA=audioCtx.currentTime, nowG=getGameTime(); t0Audio=nowA; t0Game=nowG; startEngine(); });
+btnPause.addEventListener('click',()=>togglePause());
+btnStop.addEventListener('click',()=>{ stopEngine(); if(audioCtx) audioCtx.suspend(); resetPlayback(); });
+btnDownloadMelody.addEventListener('click',()=>downloadCurrentMelody());
+btnBack.addEventListener('click',()=>{ stopEngine(); if(audioCtx) audioCtx.resume(); document.getElementById('wrapGame').style.display='none'; document.getElementById('start').style.display='flex'; });
+
+/* =========================
+   Input del piano físico
+========================= */
+window.addEventListener('keydown',(e)=>{
+  if(document.getElementById('wrapGame').style.display==='none') return;
+  const k=e.key.toLowerCase();
+  const entry=Array.from(keyboardMapVisible.entries()).find(([note,key])=>key===k);
+  if(entry){ const note=entry[0]; pressKeyVisual(note); playHybridNote(note,audioCtx.currentTime+.003,.96,.9); }
+});
+</script>
+</body>
+</html>
