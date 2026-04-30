@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Agustina - Asistente Virtual</title>
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Agustina">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/4712/4712010.png">
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            overflow: hidden;
+        }
+        #chat-container {
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            padding: 25px;
+            background-color: #1e1e1e;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #f55036;
+            margin-bottom: 5px;
+            font-size: 1.8rem;
+        }
+        #statusText {
+            margin: 20px 0;
+            font-size: 1.1rem;
+            color: #aaaaaa;
+            min-height: 80px;
+            line-height: 1.5;
+        }
+        .controles {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+        button {
+            padding: 15px 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #btnListen {
+            background-color: #f55036;
+            box-shadow: 0 4px 12px rgba(245, 80, 54, 0.3);
+            flex: 2;
+        }
+        #btnListen.listening {
+            background-color: #28a745;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+            animation: pulse 2s infinite;
+        }
+        #btnStop {
+            background-color: #444;
+            flex: 1;
+        }
+        #btnStop:active {
+            background-color: #666;
+            transform: scale(0.95);
+        }
+        .config-voz {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        select {
+            margin-top: 8px;
+            padding: 12px;
+            border-radius: 12px;
+            background-color: #2d2d2d;
+            color: white;
+            border: 1px solid #444;
+            font-size: 0.9rem;
+            width: 100%;
+            appearance: none;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <h1>Agustina</h1>
+        <p style="font-size: 0.9rem; color: #888;">I.E. San Agustín</p>
+        
+        <p id="statusText">Presiona el botón para despertar a Agustina.</p>
+        
+        <div class="controles">
+            <button id="btnListen">Iniciar Sistema</button>
+            <button id="btnStop">Parar 🛑</button>
+        </div>
+
+        <div class="config-voz">
+            <label for="voiceSelect">Voz de Agustina:</label>
+            <select id="voiceSelect">
+                <option>Cargando voces...</option>
+            </select>
+        </div>
+        
+        <p style="margin-top: 20px; font-size: 0.8rem; color: #555;">Di: "Hola Agustina..." o pide "Reproduce [música]"</p>
+    </div>
+
+    <script>
+        // --- 1. DOBLE SEGURIDAD DE CLAVES ---
+        let API_KEY = localStorage.getItem('groqApiKey');
+        let YT_API_KEY = localStorage.getItem('ytApiKey');
+
+        if (!API_KEY) {
+            API_KEY = prompt("1/2 - Pega tu clave de GROQ (Cerebro IA):");
+            if (API_KEY) localStorage.setItem('groqApiKey', API_KEY);
+        }
+        if (!YT_API_KEY) {
+            YT_API_KEY = prompt("2/2 - Pega tu clave de la API DE YOUTUBE:");
+            if (YT_API_KEY) localStorage.setItem('ytApiKey', YT_API_KEY);
+        }
+
+        const btnListen = document.getElementById('btnListen');
+        const btnStop = document.getElementById('btnStop');
+        const statusText = document.getElementById('statusText');
+        const voiceSelect = document.getElementById('voiceSelect');
+        
+        let vocesDisponibles = [];
+        let asistenteHablando = false;
+        let esperandoComando = false;
+        let sistemaActivo = false;
+        
+        // NUEVA VARIABLE: Control de latencia Bluetooth
+        let procesandoComando = false; 
+
+        // --- 2. MOTOR DE VOZ ---
+        function cargarVoces() {
+            vocesDisponibles = window.speechSynthesis.getVoices();
+            voiceSelect.innerHTML = '';
+            const vocesEspañol = vocesDisponibles.filter(v => v.lang.includes('es'));
+            let indiceDefecto = 0; let nivelPrioridad = 0;
+            vocesEspañol.forEach((voz, i) => {
+                const opt = document.createElement('option');
+                opt.textContent = `${voz.name} (${voz.lang})`;
+                opt.value = vocesDisponibles.indexOf(voz);
+                voiceSelect.appendChild(opt);
+                const nombre = voz.name.toLowerCase();
+                const lang = voz.lang.toLowerCase();
+                if (lang.includes('co') && nivelPrioridad < 3) { indiceDefecto = i; nivelPrioridad = 3; } 
+                else if ((nombre.includes('female') || nombre.includes('mujer') || nombre.includes('sabina') || nombre.includes('helena')) && nivelPrioridad < 2) { indiceDefecto = i; nivelPrioridad = 2; }
+            });
+            if (vocesEspañol.length > 0) voiceSelect.selectedIndex = indiceDefecto;
+        }
+        if (speechSynthesis.onvoiceschanged !== undefined) { speechSynthesis.onvoiceschanged = cargarVoces; }
+
+        // --- 3. RECONOCIMIENTO DE VOZ Y COMANDOS ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) statusText.textContent = "Navegador no soporta voz.";
+        
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-CO';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+            sistemaActivo = true;
+            btnListen.textContent = "Agustina Activa";
+            btnListen.classList.add("listening");
+            if (!asistenteHablando) statusText.textContent = "Di 'Hola Agustina'...";
+        };
+
+        // BÚSQUEDA YOUTUBE
+        async function reproducirMusica(comandoText) {
+            let busqueda = comandoText.replace("reproduce", "").replace("pon música", "").replace("pon musica", "").replace("de", "").trim();
+            
+            hablar(`Enseguida. Buscando ${busqueda}.`);
+            
+            sistemaActivo = false;
+            esperandoComando = false;
+            
+            btnListen.textContent = "Iniciar Sistema";
+            btnListen.classList.remove("listening");
+            statusText.textContent = `Conectando con YouTube para buscar "${busqueda}"...`;
+
+            if (!YT_API_KEY) return;
+
+            try {
+                const urlYT = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(busqueda)}&type=video&key=${YT_API_KEY}`;
+                const respuesta = await fetch(urlYT);
+                const datos = await respuesta.json();
+
+                if (datos.items && datos.items.length > 0) {
+                    const videoId = datos.items[0].id.videoId;
+                    const titulo = datos.items[0].snippet.title;
+                    
+                    statusText.innerHTML = `Reproduciendo:<br><b>${titulo}</b>`;
+                    
+                    setTimeout(() => {
+                        window.open(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`, '_blank');
+                    }, 2500);
+                } else {
+                    statusText.textContent = "No encontré esa canción.";
+                    hablar("Lo siento, no encontré resultados para esa canción.");
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        recognition.onresult = (event) => {
+            if (!sistemaActivo) return;
+            const transcript = event.results[event.resultIndex][0].transcript.toLowerCase();
+
+            // LÓGICA DE OPTIMIZACIÓN BLUETOOTH:
+            // Apagamos el micrófono inmediatamente al escuchar, ANTES de procesar.
+            procesandoComando = true;
+            recognition.stop(); 
+
+            if (transcript.includes("hola agustina")) {
+                const comando = transcript.split("hola agustina")[1]?.trim();
+                if (comando && comando.length > 2) {
+                    if (comando.startsWith("reproduce") || comando.startsWith("pon música") || comando.startsWith("pon musica")) {
+                        reproducirMusica(comando);
+                    } else {
+                        procesarIA(comando);
+                        esperandoComando = false;
+                    }
+                } else {
+                    hablar("Hola, te escucho. ¿En qué puedo ayudarte?");
+                    esperandoComando = true;
+                }
+            } else if (esperandoComando) {
+                if (transcript.startsWith("reproduce") || transcript.startsWith("pon música") || transcript.startsWith("pon musica")) {
+                    reproducirMusica(transcript);
+                } else {
+                    procesarIA(transcript);
+                }
+                esperandoComando = false;
+            }
+        };
+
+        recognition.onend = () => { 
+            // Control estricto: Solo reinicia si no está procesando ni hablando
+            if (sistemaActivo && !asistenteHablando && !procesandoComando) { 
+                try { recognition.start(); } catch(e) {} 
+            } 
+        };
+
+        // --- 4. CEREBRO (GROQ) ---
+        async function procesarIA(texto) {
+            statusText.innerHTML = `Tú: "${texto}"<br><em>Pensando...</em>`;
+            try {
+                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [
+                            { role: "system", content: "Eres Agustina, asistente de la I.E. San Agustín. Eres amable, colombiana y experta en conocimientos generales. Responde de forma clara y breve para ser leída en voz alta." },
+                            { role: "user", content: texto }
+                        ],
+                        max_tokens: 200
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error();
+                const respuesta = data.choices[0].message.content;
+                statusText.innerHTML = `Tú: "${texto}"<br><span style="color: #f55036;">Agustina: "${respuesta}"</span>`;
+                hablar(respuesta);
+            } catch (e) {
+                statusText.innerHTML = `Error. <button onclick="localStorage.clear(); location.reload();">Borrar Claves y Reiniciar</button>`;
+            }
+        }
+
+        // --- 5. SÍNTESIS DE VOZ (Máxima compatibilidad Bluetooth) ---
+        function hablar(t) {
+            window.speechSynthesis.cancel();
+            asistenteHablando = true;
+            
+            // Liberamos el estado de procesamiento porque ya tiene la respuesta lista
+            procesandoComando = false; 
+            recognition.stop(); 
+            
+            // Aumentamos el retraso a 1 segundo exacto (1000ms) para garantizar el acople A2DP
+            setTimeout(() => {
+                const textoPreparado = "........ , , , " + t; 
+                const u = new SpeechSynthesisUtterance(textoPreparado);
+                const v = vocesDisponibles[voiceSelect.value];
+                if (v) u.voice = v;
+                u.lang = 'es-CO';
+                u.rate = 1.0;
+                
+                u.onend = () => {
+                    asistenteHablando = false;
+                    if (sistemaActivo) { 
+                        setTimeout(() => { 
+                            try { recognition.start(); } catch(e) {} 
+                            statusText.textContent = "Esperando comando..."; 
+                        }, 300); 
+                    }
+                };
+                window.speechSynthesis.speak(u);
+            }, 1000);
+        }
+
+        // --- BOTONES ---
+        btnListen.addEventListener('click', () => {
+            cargarVoces();
+            let audioDesbloqueo = new SpeechSynthesisUtterance('');
+            window.speechSynthesis.speak(audioDesbloqueo);
+            try { recognition.start(); } catch(e) {}
+        });
+        btnStop.addEventListener('click', () => {
+            window.speechSynthesis.cancel();
+            sistemaActivo = false; asistenteHablando = false; procesandoComando = false; recognition.stop();
+            btnListen.textContent = "Iniciar Sistema"; btnListen.classList.remove("listening");
+            statusText.textContent = "Sistema detenido.";
+        });
+    </script>
+</body>
+</html>
