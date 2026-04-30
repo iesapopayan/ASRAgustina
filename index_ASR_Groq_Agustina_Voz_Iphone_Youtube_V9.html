@@ -217,7 +217,8 @@
                     
                     // Esperamos 2.5 segundos para que termine de hablar y disparamos la canción directa
                     setTimeout(() => {
-                        window.open(`https://music.youtube.com/watch?v=${videoId}`, '_blank');
+                        //window.open(`https://music.youtube.com/watch?v=${videoId}`, '_blank');
+                        window.open(`https://music.youtube.com/watch?v=${videoId}&autoplay=1`, '_blank');
                     }, 2500);
                 } else {
                     statusText.textContent = "No encontré esa canción.";
