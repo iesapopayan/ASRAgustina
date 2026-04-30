@@ -148,8 +148,6 @@
         let asistenteHablando = false;
         let esperandoComando = false;
         let sistemaActivo = false;
-        
-        // NUEVA VARIABLE: Control de latencia Bluetooth
         let procesandoComando = false; 
 
         // --- 2. MOTOR DE VOZ ---
@@ -212,7 +210,7 @@
                     const videoId = datos.items[0].id.videoId;
                     const titulo = datos.items[0].snippet.title;
                     
-                    statusText.innerHTML = `Reproduciendo:<br><b>${titulo}</b>`;
+                    statusText.innerHTML = `Reproduciendo en YouTube:<br><b>${titulo}</b>`;
                     
                     setTimeout(() => {
                         window.open(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`, '_blank');
@@ -230,8 +228,6 @@
             if (!sistemaActivo) return;
             const transcript = event.results[event.resultIndex][0].transcript.toLowerCase();
 
-            // LÓGICA DE OPTIMIZACIÓN BLUETOOTH:
-            // Apagamos el micrófono inmediatamente al escuchar, ANTES de procesar.
             procesandoComando = true;
             recognition.stop(); 
 
@@ -259,7 +255,6 @@
         };
 
         recognition.onend = () => { 
-            // Control estricto: Solo reinicia si no está procesando ni hablando
             if (sistemaActivo && !asistenteHablando && !procesandoComando) { 
                 try { recognition.start(); } catch(e) {} 
             } 
@@ -291,18 +286,20 @@
             }
         }
 
-        // --- 5. SÍNTESIS DE VOZ (Máxima compatibilidad Bluetooth) ---
+        // --- 5. SÍNTESIS DE VOZ (LA PALABRA DE SACRIFICIO) ---
         function hablar(t) {
             window.speechSynthesis.cancel();
             asistenteHablando = true;
             
-            // Liberamos el estado de procesamiento porque ya tiene la respuesta lista
             procesandoComando = false; 
             recognition.stop(); 
             
-            // Aumentamos el retraso a 1 segundo exacto (1000ms) para garantizar el acople A2DP
+            // Aumentamos a 1.5 segundos (1500ms) para los parlantes más lentos en cambiar de modo
             setTimeout(() => {
-                const textoPreparado = "........ , , , " + t; 
+                // Inyectamos "Ok..." como palabra de sacrificio. 
+                // El Bluetooth se comerá este sonido y dejará libre la respuesta importante.
+                const textoPreparado = "Ok... " + t; 
+                
                 const u = new SpeechSynthesisUtterance(textoPreparado);
                 const v = vocesDisponibles[voiceSelect.value];
                 if (v) u.voice = v;
@@ -319,7 +316,7 @@
                     }
                 };
                 window.speechSynthesis.speak(u);
-            }, 1000);
+            }, 1500);
         }
 
         // --- BOTONES ---
