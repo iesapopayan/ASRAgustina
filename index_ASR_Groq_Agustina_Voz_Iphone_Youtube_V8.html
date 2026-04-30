@@ -198,24 +198,24 @@
             if (!asistenteHablando) statusText.textContent = "Di 'Hola Agustina'...";
         };
 
-        // --- NUEVA FUNCIÓN: Reproductor de Música Seguro ---
+// --- NUEVA FUNCIÓN: Reproductor de Música Directo ---
         function reproducirMusica(comandoText) {
             let busqueda = comandoText.replace("reproduce", "").replace("pon música", "").replace("pon musica", "").replace("de", "").trim();
-            hablar(`Enseguida. Buscando ${busqueda}.`);
             
-            // APAGAMOS EL MICRÓFONO PARA LIBERAR EL PARLANTE BLUETOOTH
+            // Agustina habla, pero NO retrasamos la apertura de la pestaña
+            hablar(`Reproduciendo ${busqueda}.`);
+            
             sistemaActivo = false;
             esperandoComando = false;
             
             btnListen.textContent = "Iniciar Sistema";
             btnListen.classList.remove("listening");
-            statusText.textContent = `Escuchando música. Presiona Iniciar para volver a hablar con Agustina.`;
+            statusText.textContent = `Reproduciendo música...`;
 
-            // Abrimos YouTube después de que ella hable
-            setTimeout(() => {
-                //window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(busqueda)}`, '_blank');
-                window.open(`https://music.youtube.com/search?q=${encodeURIComponent(busqueda)}`, '_blank');                
-            }, 2500);
+            // Truco: Usamos DuckDuckGo (!ducky) para forzar un clic automático en el primer video de YouTube
+            // Lo abrimos INMEDIATAMENTE sin setTimeout para que el celular no nos bloquee el Autoplay
+            const urlDirecta = `https://duckduckgo.com/?q=!ducky+${encodeURIComponent(busqueda)}+site%3Ayoutube.com`;
+            window.open(urlDirecta, '_blank');
         }
 
         recognition.onresult = (event) => {
@@ -290,15 +290,17 @@
             asistenteHablando = true;
             recognition.stop();
 
+        // Aumentamos a 800ms para parlantes más lentos
             setTimeout(() => {
-                const textoPreparado = ", " + t; 
+                // Usamos puntos suspensivos para forzar al motor de voz a emitir "audio en blanco" antes de hablar
+                const textoPreparado = "........ , , , " + t; 
                 const u = new SpeechSynthesisUtterance(textoPreparado);
                 
                 const v = vocesDisponibles[voiceSelect.value];
                 if (v) u.voice = v;
                 u.lang = 'es-CO';
                 u.rate = 1.0;
-
+            
                 u.onend = () => {
                     asistenteHablando = false;
                     if (sistemaActivo) {
